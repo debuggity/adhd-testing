@@ -131,33 +131,6 @@
   /* status text */
   #status{margin-top:12px;color:var(--shadow);font-size:18px}
 
-  /* --- RESPONSIVE STYLES --- */
-  
-  /* For Tablets and smaller laptops */
-  @media (max-width: 1024px) {
-    body {
-      padding: 40px 15px;
-      gap: 25px;
-    }
-
-    h2 {
-      font-size: 28px;
-    }
-
-    .window {
-      width: 90%;
-      max-width: 700px;
-    }
-    
-    .content {
-      /* This will allow buttons to wrap to the next line if needed */
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-  }
-
-  /* For mobile phones */
   @media (max-width: 768px) {
     html {
       zoom: normal; /* remove the fixed zoom on mobile */
@@ -257,7 +230,7 @@
   </div>
 
   <script>
-    const MODEL_URL='./model/';
+  const MODEL_URL='./model/';
   const pick=document.getElementById('pick');
   const runBtn=document.getElementById('run');
   const ultraRunBtn=document.getElementById('ultraRun');
@@ -276,6 +249,7 @@
   let selectedHat = null;
   const OVERHANG=.75;
 
+  // --- NEW: A global scale factor to bridge the gap between image and screen coordinates ---
   let coordinateScale = 1;
 
   // --- INITIALIZATION ---
@@ -287,9 +261,14 @@
     updateUIState();
   })();
 
+  // --- NEW: Function to re-calculate scale and update hat visuals on resize ---
   function updateScaleAndHatPositions() {
       if (img.hidden || !img.naturalWidth) return;
-      coordinateScale = img.clientWidth > 0 ? img.naturalWidth / img.clientWidth : 1;
+
+      // Calculate the crucial scale factor
+      coordinateScale = img.naturalWidth / wrap.clientWidth;
+
+      // Reposition all hats according to the new scale
       hats.forEach(h => {
           const data = h.dataset;
           h.style.left = `${parseFloat(data.x) / coordinateScale}px`;
@@ -298,6 +277,7 @@
           h.style.height = `${parseFloat(data.h) / coordinateScale}px`;
       });
   }
+
 
   function clearHats() {
     hats.forEach(h=>h.remove());
@@ -327,7 +307,7 @@
       info.style.color = '';
 
       if (selectedHat) {
-          info.textContent = 'Drag, pinch, or rotate anywhere on the image to transform the selected hat.';
+          info.textContent = 'Drag, pinch, or rotate the selected hat. Use handles to resize.';
       } else if (hasHats || hasDistortion) {
           let parts = [];
           if (hasHats) parts.push(`${hats.length} hat(s) placed`);
@@ -360,7 +340,7 @@
       const r = new FileReader();
       r.onload = e => {
           clearOverlays();
-          img.src = e.target.result;
+          img.src = e.target.result; 
           img.hidden = false;
           layer.hidden = true;
           info.style.color = '';
@@ -375,6 +355,8 @@
 
       const needsResize = w > MAX_DIMENSION || h > MAX_DIMENSION;
 
+      // This block now just handles resizing the source image if needed.
+      // The visual scaling is handled separately.
       if (needsResize) {
           info.textContent = `Resizing image to fit ${MAX_DIMENSION}px...`;
           const ratio = w / h;
@@ -390,19 +372,24 @@
           canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
           img.src = canvas.toDataURL('image/jpeg', 0.92);
-          return;
+          // Let the 'load' event run again for the resized image
+          return; 
       }
-
-      wrap.style.width = img.naturalWidth + 'px';
-      wrap.style.height = img.naturalHeight + 'px';
+      
+      // Set container and canvas dimensions based on the final image
+      wrap.style.width = img.naturalWidth + 'px'; // Set a base width
+      wrap.style.height = img.naturalHeight + 'px'; // Set a base height
       layer.width = img.naturalWidth;
       layer.height = img.naturalHeight;
 
       updateUIState();
+      // --- NEW: CRITICAL call to set the initial scale ---
       updateScaleAndHatPositions();
   });
 
+  // --- NEW: Listen for window resize to update the scale dynamically ---
   window.addEventListener('resize', updateScaleAndHatPositions);
+
 
   wrap.addEventListener('click', (e) => {
       if (e.target === wrap || e.target === img || e.target === layer) {
@@ -524,10 +511,12 @@
     out.width=img.naturalWidth;
     out.height=img.naturalHeight;
     const ctx=out.getContext('2d');
-
+    
     const baseImage = hasDistortion ? layer : img;
     ctx.drawImage(baseImage, 0, 0);
 
+    // MODIFIED: This part now works perfectly because the dataset values
+    // are the TRUE image coordinates, which is what the canvas needs.
     hats.forEach(h=>{
       const{x, y, w, h:ht, rot, scale}=Object.fromEntries(Object.entries(h.dataset).map(([k,v])=>[k,parseFloat(v)]));
       ctx.save();
@@ -544,42 +533,8 @@
     link.click();
   });
 
-  // --- GLOBAL INTERACTION LOGIC FOR WRAPPER ---
-  interact(wrap)
-    .draggable({
-      listeners: {
-        move(ev) {
-          if (!selectedHat) return; // Only drag if a hat is selected
-          const h = selectedHat;
-          let x = parseFloat(h.dataset.x) + (ev.dx * coordinateScale);
-          let y = parseFloat(h.dataset.y) + (ev.dy * coordinateScale);
 
-          ({x,y} = clampPos({x, y, w: +h.dataset.w, h: +h.dataset.h}));
-
-          Object.assign(h.dataset, {x, y});
-          h.style.left = `${x / coordinateScale}px`;
-          h.style.top = `${y / coordinateScale}px`;
-        }
-      }
-    })
-    .gesturable({
-      listeners: {
-        move (ev) {
-          if (!selectedHat) return; // Only gesture if a hat is selected
-          const h = selectedHat;
-          let angle = parseFloat(h.dataset.rot) + ev.da;
-          let scale = parseFloat(h.dataset.scale) * (1 + ev.ds);
-
-          // Clamp scale to prevent it from becoming too small or large
-          scale = Math.max(0.1, Math.min(scale, 10));
-
-          h.style.transform = `rotate(${angle}deg) scale(${scale})`;
-          Object.assign(h.dataset, {rot: angle, scale: scale});
-        }
-      }
-    });
-
-
+  // --- MODIFIED: `clampPos` now uses the image's real dimensions ---
   function clampPos({x,y,w,h}){
     const maxX=img.naturalWidth-w*(1-OVERHANG);
     const minX=-w*OVERHANG;
@@ -589,12 +544,14 @@
             y:Math.min(Math.max(y,minY),maxY) };
   }
 
+  // --- MODIFIED: `addHat` now stores TRUE coordinates in the dataset and calculates SCALED styles ---
   function addHat({box}){
     const h=document.createElement('img');
     h.src=hatSrc; h.className='hat';
 
     let trueW, trueH, trueX, trueY;
 
+    // All calculations are based on the image's natural dimensions
     if (box) {
       trueW = box.width*1.25;
       trueH = hatBase.naturalHeight/hatBase.naturalWidth * trueW * 1.25;
@@ -609,14 +566,21 @@
 
     ({x: trueX, y: trueY} = clampPos({x: trueX, y: trueY, w: trueW, h: trueH}));
 
+    // Store TRUE image coordinates in the dataset
     Object.assign(h.dataset, {x: trueX, y: trueY, w: trueW, h: trueH, rot: 0, scale: 1});
-
+    
+    // Set the visual style based on the CURRENT scale factor
     Object.assign(h.style,{
         width: `${trueW / coordinateScale}px`,
         height: `${trueH / coordinateScale}px`,
         left: `${trueX / coordinateScale}px`,
         top: `${trueY / coordinateScale}px`,
         transform:'rotate(0deg) scale(1)'
+    });
+
+    h.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectHat(h);
     });
 
     h.addEventListener('wheel',e=>{
@@ -643,12 +607,26 @@
 
     wrap.appendChild(h); hats.push(h);
 
-    // --- HAT-SPECIFIC INTERACTIONS (TAP-TO-SELECT, RESIZE-HANDLES) ---
     interact(h)
+      .draggable({
+        listeners:{move(ev){
+          // --- MODIFIED: Convert screen movement (ev.dx) to image coordinate movement ---
+          let x = parseFloat(h.dataset.x) + (ev.dx * coordinateScale);
+          let y = parseFloat(h.dataset.y) + (ev.dy * coordinateScale);
+          
+          ({x,y} = clampPos({x, y, w: +h.dataset.w, h: +h.dataset.h}));
+          
+          Object.assign(h.dataset,{x,y});
+          // Update visual style based on the new scaled position
+          h.style.left = `${x / coordinateScale}px`;
+          h.style.top = `${y / coordinateScale}px`;
+        }}
+      })
       .resizable({
           edges:{left:true,right:true,top:true,bottom:true},
           listeners: {
               move(ev) {
+                  // --- MODIFIED: Convert screen resize (ev.rect) to image coordinate resize ---
                   const newTrueWidth = ev.rect.width * coordinateScale;
                   const newTrueHeight = ev.rect.height * coordinateScale;
                   let x = parseFloat(h.dataset.x) + (ev.deltaRect.left * coordinateScale);
@@ -671,12 +649,24 @@
               }),
           ],
       })
-      .on('tap', (e) => {
-        e.stopPropagation();
+      .gesturable({
+          listeners: {
+              move (ev) {
+                  const h = ev.target;
+                  if(selectedHat !== h) return;
+                  let angle = parseFloat(h.dataset.rot) + ev.da;
+                  let scale = parseFloat(h.dataset.scale) * (1 + ev.ds);
+                  h.style.transform = `rotate(${angle}deg) scale(${scale})`;
+                  Object.assign(h.dataset, {rot: angle, scale: scale});
+              }
+          }
+      })
+      .on('tap', () => {
         selectHat(h);
       });
   }
 
+  // --- distortEyes function (unchanged, but provided for completeness) ---
   function distortEyes(detections) {
       const ctx = layer.getContext('2d');
       ctx.drawImage(img, 0, 0, layer.width, layer.height);
@@ -684,7 +674,7 @@
       const distortedImageData = ctx.createImageData(layer.width, layer.height);
       const origData = originalImageData.data;
       const newData = distortedImageData.data;
-      const strength = 0.65;
+      const strength = 0.65; 
       const effectScale = 3.0;
       const getInterpolatedPixel = (x, y) => {
           const x_floor = Math.floor(x), y_floor = Math.floor(y);
