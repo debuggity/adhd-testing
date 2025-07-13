@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ADHDify</title>
+  <!-- Mobile viewport optimization -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- face-api.js -->
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+  <!-- interact.js -->
+  <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+
+  <!-- pixel font -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+
+  <style>
+  /* ─── variables ─── */
+  :root{
+    --bg:#f2efe8; --ink:#2b2b2b; --mid:#c2c2c2;
+    --light:#faf9f5; --shadow:#7a7a7a; --corner:2px;
+    --rainbow:linear-gradient(45deg,#ff0040,#ff8000,#ffff00,#00ff00,#00c0ff,#4000ff,#ff00c0);
+  }
+
+  /* ─── layout ─── */
+  html,body{height:100%;margin:0}
+  html{zoom:80%}
+  body{
+    font-family:'VT323',monospace;
+    background:var(--bg) url('./assets/wallpaper.png') repeat fixed;
+    color:var(--ink); display:flex; flex-direction:column;
+    align-items:center; padding:20px 10px; gap:20px; box-sizing: border-box;
+  }
+  h2{margin:0;font-size:32px;letter-spacing:1px;text-shadow:1px 1px var(--light); text-align: center;}
+
+  /* ─── window frame ─── */
+  .window{background:var(--light);border:2px solid var(--ink);box-shadow:0 0 0 1px var(--shadow);display:inline-block; width:100%; max-width: 900px;}
+  .titlebar{height:24px;background:var(--mid);display:flex;align-items:center;justify-content:space-between;padding:0 6px;border-bottom:2px solid var(--ink);font-size:19px}
+  .controls{display:flex;gap:3px}
+  .btn-square{width:14px;height:14px;background:var(--light);border:1px solid var(--ink)}
+
+  /* ─── content area ─── */
+  .content{padding:15px;text-align:center}
+  .button-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+  #wrap{position:relative;display:inline-block;max-width:100%;overflow:hidden; touch-action: none;}
+  #wrap img,#wrap canvas{display:block;max-width:100%;height:auto;image-rendering:pixelated}
+  #shot,#layer{position:absolute;top:0;left:0;max-width:100%;height:auto;image-rendering:pixelated;pointer-events:none;z-index:0}
+  .hat{position:absolute;cursor:move;touch-action:none;user-select:none;box-sizing:border-box; will-change: transform, width, height;}
+  .hat.selected{border:2px dashed var(--ink)}
+  .delete-btn{position:absolute;top:-10px;right:-10px;width:24px;height:24px;background:#ff5555;color:#fff;border:1px solid var(--ink);border-radius:50%;cursor:pointer;display:none;align-items:center;justify-content:center;font:700 18px sans-serif;z-index:10}
+  .hat.selected .delete-btn{display:flex}
+
+  /* ─── buttons – base ─── */
+  input[type=file],button{
+    font-family:inherit;font-size:16px;background:var(--light);
+    border:2px solid var(--ink);padding:6px 12px;margin:4px;
+    cursor:pointer;display:inline-flex;align-items:center;gap:8px;
+    transition:.2s all;
+  }
+  input[type=file]{ width: 100%; box-sizing: border-box; }
+  input[type=file]::file-selector-button{
+    font-family:inherit;background:var(--mid);border:none;padding:4px 10px;cursor:pointer;
+  }
+  button:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ─── icon sizing ─── */
+  button svg{width:16px;height:16px;fill:currentColor}
+
+  /* ─── rainbow animation ─── */
+  @keyframes rainbowShift{
+    0%,100%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+  }
+
+  @keyframes adhdJitter {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-2px, 2px); }
+    40% { transform: translate(2px, -2px); }
+    60% { transform: translate(-1px, -1px); }
+    80% { transform: translate(1px, 1px); }
+  }
+
+  /* ADHDify (run) */
+  #run:hover{
+    color:#fff;
+    border-color:#fff;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.7); /* ADDED FOR VISIBILITY */
+    background: repeating-linear-gradient(
+        -45deg,
+        #ff0040, #ff0040 12px, #ff8000 12px, #ff8000 24px,
+        #ffff00 24px, #ffff00 36px, #00ff00 36px, #00ff00 48px,
+        #00c0ff 48px, #00c0ff 60px, #4000ff 60px, #4000ff 72px
+    );
+    background-size: 250% 250%;
+    animation: rainbowShift 5s linear infinite;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 0 var(--shadow);
+  }
+
+  /* ULTRA ADHDify (ultraRun) */
+  #ultraRun{
+    border-width:3px;font-weight:bold;
+  }
+  /* Faster, thinner stripes with a jitter animation and glitchy shadow */
+  #ultraRun:hover{
+    color:#fff;
+    border-color: var(--ink);
+    background: repeating-linear-gradient(
+        -45deg,
+        #ff0040, #ff0040 7px, #ff8000 7px, #ff8000 14px,
+        #ffff00 14px, #ffff00 21px, #00ff00 21px, #00ff00 28px,
+        #00c0ff 28px, #00c0ff 35px, #4000ff 35px, #4000ff 42px
+    );
+    background-size: 350% 350%;
+    animation:
+        rainbowShift 2s linear infinite,
+        adhdJitter 0.25s linear infinite;
+    box-shadow: 3px 3px 0 #ff0040, -3px -3px 0 #00c0ff;
+    /* ENHANCED SHADOW FOR MAX VISIBILITY */
+    text-shadow: 1px 1px 0 #000, 2px 2px 0 #000;
+  }
+
+  /* Add Hat */
+  #addHat{background:#55aa55;color:#fff;border-color:#3d7e3d}
+  #addHat:hover{background:#69c069;border-color:#55aa55;box-shadow:0 0 8px rgba(0,128,0,.4)}
+
+  /* Delete Selected */
+  #deleteHat{background:#cc4444;color:#fff;border-color:#992c2c}
+  #deleteHat:hover{background:#e66767;border-color:#cc4444;box-shadow:0 0 8px rgba(200,0,0,.4)}
+
+  /* Download button – keep neutral but clearer intent */
+  #download{background:#3d88c8;color:#fff;border-color:#2b5a80}
+  #download:hover{background:#4d9ae0;border-color:#3d88c8;box-shadow:0 0 8px rgba(0,64,128,.4)}
+
+  /* status text */
+  #status{margin-top:12px;color:var(--shadow);font-size:18px}
+
+  /* Mobile Responsive Styles */
+  @media (max-width: 768px) {
+    body {
+        padding: 10px;
+        gap: 15px;
+    }
+    h2 {
+        font-size: 24px;
+    }
+    .content {
+        padding: 10px;
+    }
+    .button-grid {
+        gap: 5px;
+    }
+    input[type=file], button {
+        font-size: 14px;
+        padding: 5px 8px;
+        gap: 5px;
+    }
+    #status {
+        font-size: 16px;
+    }
+  }
+
+  </style>
+</head>
+<body>
+
+  <h2>Magic ADHD filters · Moveable ADHD Brains · Goofy Eyes</h2>
+
+  <!-- main app window -->
+  <div class="window">
+    <div class="titlebar">
+      <span>ADHD Filter Suite v2.0</span>
+      <div class="controls">
+        <div class="btn-square"></div>
+        <div class="btn-square"></div>
+      </div>
+    </div>
+
+    <div class="content">
+      <input type="file" id="pick" accept="image/*">
+      <div class="button-grid">
+        <button id="run" disabled>
+          <!-- Magic Wand Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges">
+            <path d="M4 20L16 8l2 2L6 22l-2-2z M17 2h2v4h4v2h-4v4h-2V8h-4V6h4V2z" fill="currentColor"/>
+          </svg>
+          ADHDify
+        </button>
+         <button id="ultraRun" disabled>
+          <!-- Zap Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+            <path d="M7 0L0 9h6v7l7-9H7V0z"/>
+          </svg>
+          ULTRA ADHDify
+        </button>
+        <button id="addHat" disabled>
+          <!-- Plus Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+              <path d="M7 0h2v7h7v2h-7v7h-2v-7h-7v-2h7v-7z"/>
+          </svg>
+          Add Hat
+        </button>
+        <button id="deleteHat" disabled>
+          <!-- Trash Can Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+            <path d="M2 5v11h12V5H2zm3 1h2v8H5V6zm4 0h2v8H9V6zM1 2h14v2H1V2z"/>
+          </svg>
+          Delete Selected
+        </button>
+        <button id="download" disabled>
+          <!-- Download Icon -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+            <path d="M14 9h-3v-8h-4v8h-3l5 6 5-6zm-13 7h14v-2h-14v2z"/>
+          </svg>
+          Download PNG
+        </button>
+      </div>
+      <p id="status">loading models…</p>
+      <br>
+      <div id="wrap">
+        <img id="shot" hidden>
+        <canvas id="layer" hidden></canvas>
+      </div>
+    </div>
+  </div>
+
+<script>
+const MODEL_URL='./model/';
+const pick=document.getElementById('pick');
+const runBtn=document.getElementById('run');
+const ultraRunBtn=document.getElementById('ultraRun');
+const addBtn=document.getElementById('addHat');
+const deleteBtn=document.getElementById('deleteHat');
+const dlBtn=document.getElementById('download');
+const img=document.getElementById('shot');
+const layer=document.getElementById('layer');
+const info=document.getElementById('status');
+const wrap=document.getElementById('wrap');
+
+const hatSrc='./assets/hat.png';
+const hatBase=new Image(); hatBase.src=hatSrc;
+
+const hats=[];
+let selectedHat = null;
+const OVERHANG=.75;
+
+// --- INITIALIZATION ---
+(async()=>{
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+  ]);
+  updateUIState();
+})();
+
+function clearHats() {
+  hats.forEach(h=>h.remove());
+  hats.length=0;
+  selectHat(null);
+}
+
+function clearOverlays() {
+    clearHats();
+    const ctx = layer.getContext('2d');
+    ctx.clearRect(0, 0, layer.width, layer.height);
+    layer.hidden = true;
+    img.hidden = false;
+}
+
+function updateUIState() {
+    const hasImage = !img.hidden || !layer.hidden;
+    const hasDistortion = !layer.hidden;
+    const hasHats = hats.length > 0;
+
+    runBtn.disabled = !hasImage;
+    ultraRunBtn.disabled = !hasImage;
+    addBtn.disabled = !hasImage;
+    deleteBtn.disabled = !selectedHat;
+    dlBtn.disabled = !hasImage || (!hasHats && !hasDistortion);
+
+    info.style.color = '';
+
+    if (selectedHat) {
+        info.textContent = 'Drag, pinch to scale, or twist to rotate the selected hat.';
+    } else if (hasHats || hasDistortion) {
+        let parts = [];
+        if (hasHats) parts.push(`${hats.length} hat(s) placed`);
+        if (hasDistortion) parts.push('eyes distorted');
+        info.textContent = parts.join(' and ') + '. Click a hat to select it.';
+    } else if (hasImage) {
+        info.textContent = 'Image loaded. Click a button to begin.';
+    } else {
+        info.textContent = 'models ready — choose an image';
+    }
+}
+
+function selectHat(hatElement) {
+    if (selectedHat) {
+        selectedHat.classList.remove('selected');
+    }
+    selectedHat = hatElement;
+    if (selectedHat) {
+        selectedHat.classList.add('selected');
+    }
+    updateUIState();
+}
+
+const MAX_DIMENSION = 1920;
+
+// --- EVENT LISTENERS ---
+pick.addEventListener('change', () => {
+    const f = pick.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = e => {
+        clearOverlays();
+        img.src = e.target.result;
+        img.hidden = false;
+        layer.hidden = true;
+        info.style.color = '';
+        info.textContent = 'Loading image...';
+    };
+    r.readAsDataURL(f);
+});
+
+img.addEventListener('load', () => {
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+
+    if (w <= MAX_DIMENSION && h <= MAX_DIMENSION) {
+        wrap.style.width = w + 'px';
+        wrap.style.height = h + 'px';
+        layer.width = w;
+        layer.height = h;
+        updateUIState();
+        return;
+    }
+
+    info.textContent = `Resizing image to fit ${MAX_DIMENSION}px...`;
+
+    const ratio = w / h;
+    if (w > h) {
+        w = MAX_DIMENSION;
+        h = Math.round(w / ratio);
+    } else {
+        h = MAX_DIMENSION;
+        w = Math.round(h * ratio);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+
+    img.src = canvas.toDataURL('image/jpeg', 0.92);
+});
+
+wrap.addEventListener('click', (e) => {
+    if (e.target === wrap || e.target === img || e.target === layer) {
+        selectHat(null);
+    }
+});
+
+runBtn.addEventListener('click',async()=>{
+  runBtn.disabled=true;
+  ultraRunBtn.disabled=true;
+  info.style.color = '';
+  info.textContent='detecting…';
+  await Promise.all([img.decode(),hatBase.decode()]);
+
+  let dets = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .45 }));
+  if (!dets.length) {
+    info.textContent = 'detecting (tier 2)…';
+    dets = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .25 }));
+  }
+  if (!dets.length) {
+    info.textContent = 'detecting (tier 3)…';
+    const loose = await faceapi.detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 }));
+    if (loose.length) {
+      loose.sort((a,b) => b.score - a.score);
+      dets = [loose[0]];
+    }
+  }
+
+  clearOverlays();
+
+  if(!dets.length){
+    info.style.color = '#cc4444';
+    info.textContent = 'Could not find a face. Please try a clearer image!';
+    const hasImage = !img.hidden;
+    runBtn.disabled = !hasImage;
+    ultraRunBtn.disabled = !hasImage;
+    return;
+  }
+
+  dets.forEach(({box})=>addHat({box}));
+  selectHat(hats[hats.length-1]);
+  updateUIState();
+});
+
+ultraRunBtn.addEventListener('click', async () => {
+  runBtn.disabled = ultraRunBtn.disabled = true;
+  info.style.color = '';
+  info.textContent = 'ULTRA detecting…';
+  await Promise.all([img.decode(), hatBase.decode()]);
+
+  let dets = await faceapi
+    .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .4 }))
+    .withFaceLandmarks(true);
+  if (!dets.length) {
+    info.textContent = 'ULTRA detecting (tier 2)…';
+    dets = await faceapi
+      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .2 }))
+      .withFaceLandmarks(true);
+  }
+  if (!dets.length) {
+    info.textContent = 'ULTRA detecting (tier 3)…';
+    const loose = await faceapi
+      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 }))
+      .withFaceLandmarks(true);
+    if (loose.length) {
+      loose.sort((a, b) => b.detection.score - a.detection.score);
+      dets = [loose[0]];
+    }
+  }
+
+  clearOverlays();
+
+  if (!dets.length) {
+    info.style.color = '#cc4444';
+    info.textContent = 'Could not find a face for ULTRA mode. Try a clearer image!';
+    const hasImage = !img.hidden;
+    runBtn.disabled = !hasImage;
+    ultraRunBtn.disabled = !hasImage;
+    return;
+  }
+
+  dets.forEach(det => addHat({ box: det.detection.box }));
+  distortEyes(dets);
+
+  selectHat(hats[hats.length - 1] || null);
+  updateUIState();
+});
+
+addBtn.addEventListener('click', () => {
+    addHat({});
+    selectHat(hats[hats.length-1]);
+    updateUIState();
+});
+
+deleteBtn.addEventListener('click', () => {
+    if (!selectedHat) return;
+    const index = hats.indexOf(selectedHat);
+    if(index > -1) hats.splice(index, 1);
+    selectedHat.remove();
+    selectHat(null);
+    updateUIState();
+});
+
+dlBtn.addEventListener('click',()=>{
+  const hasDistortion = !layer.hidden;
+  const hasHats = hats.length > 0;
+  if(!hasHats && !hasDistortion) return;
+
+  const out=document.createElement('canvas');
+  out.width=img.naturalWidth;
+  out.height=img.naturalHeight;
+  const ctx=out.getContext('2d');
+
+  const baseImage = hasDistortion ? layer : img;
+  ctx.drawImage(baseImage, 0, 0);
+
+  hats.forEach(h=>{
+    const {x, y, w, h:ht, scale, rot} = h.dataset;
+    const width = parseFloat(w) * parseFloat(scale);
+    const height = parseFloat(ht) * parseFloat(scale);
+    ctx.save();
+    ctx.translate(parseFloat(x) + width/2, parseFloat(y) + height/2);
+    ctx.rotate(parseFloat(rot) * Math.PI / 180);
+    ctx.drawImage(hatBase, -width/2, -height/2, width, height);
+    ctx.restore();
+  });
+
+  const link=document.createElement('a');
+  link.href=out.toDataURL('image/png');
+  link.download='face-hats-ultra.png';
+  link.click();
+});
+
+// --- HAT MANIPULATION ---
+function updateTransform(target) {
+    const { x, y, rot, scale } = target.dataset;
+    target.style.transform = `translate(${x}px, ${y}px) rotate(${rot}deg) scale(${scale})`;
+}
+
+function addHat({box}){
+  const h=document.createElement('img');
+  h.src=hatSrc; h.className='hat';
+
+  let w, ht, x, y;
+
+  if (box) {
+    w=box.width*1.25;
+    ht=hatBase.naturalHeight/hatBase.naturalWidth*w*1.25;
+    x=box.x+box.width/2-w/2;
+    y=box.y-ht*.95;
+  } else {
+    w = img.naturalWidth / 4;
+    ht = hatBase.naturalHeight / hatBase.naturalWidth * w;
+    x = (wrap.clientWidth / 2) - (w / 2);
+    y = (wrap.clientHeight / 2) - (ht / 2);
+  }
+  
+  Object.assign(h.dataset, { x, y, w, h: ht, rot: 0, scale: 1 });
+  Object.assign(h.style, { width: `${w}px`, height: `${ht}px` });
+  updateTransform(h);
+
+  h.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectHat(h);
+  });
+
+  // Desktop scroll-to-rotate
+  h.addEventListener('wheel',e=>{
+    if (selectedHat !== h) return;
+    e.preventDefault();
+    h.dataset.rot = parseFloat(h.dataset.rot) + e.deltaY * 0.1;
+    updateTransform(h);
+  });
+
+  const delBtn = document.createElement('div');
+  delBtn.className = 'delete-btn';
+  delBtn.innerHTML = '×';
+  delBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const index = hats.indexOf(h);
+    if(index > -1) hats.splice(index, 1);
+    h.remove();
+    selectHat(null);
+    updateUIState();
+  });
+  h.appendChild(delBtn);
+
+  wrap.appendChild(h); hats.push(h);
+
+  interact(h)
+    .draggable({
+      listeners: {
+        move(event) {
+          h.dataset.x = parseFloat(h.dataset.x) + event.dx;
+          h.dataset.y = parseFloat(h.dataset.y) + event.dy;
+          updateTransform(h);
+        }
+      }
+    })
+    .gesturable({
+        listeners: {
+            move(event) {
+                h.dataset.rot = parseFloat(h.dataset.rot) + event.da;
+                h.dataset.scale = parseFloat(h.dataset.scale) * event.ds;
+                updateTransform(h);
+            }
+        }
+    })
+    // Desktop edge-resizing (optional, good for non-touch)
+    .resizable({
+        edges: { left: true, right: true, bottom: true, top: true },
+        listeners: {
+            move: function (event) {
+                let { x, y, scale } = h.dataset;
+                x = parseFloat(x);
+                y = parseFloat(y);
+                
+                let { width, height } = event.rect;
+                width /= scale;
+                height /= scale;
+
+                Object.assign(h.style, { width: width + 'px', height: height + 'px' });
+                Object.assign(h.dataset, { w: width, h: height });
+
+                x += event.deltaRect.left;
+                y += event.deltaRect.top;
+                
+                h.dataset.x = x;
+                h.dataset.y = y;
+
+                updateTransform(h);
+            }
+        },
+        modifiers: [
+            interact.modifiers.aspectRatio({
+                ratio: 'preserve',
+                equalDelta: true,
+            })
+        ],
+    })
+    .on('tap', () => {
+      selectHat(h);
+    });
+}
+
+// --- function to distort eyes with a smooth bulge effect ---
+function distortEyes(detections) {
+    const ctx = layer.getContext('2d');
+    ctx.drawImage(img, 0, 0, layer.width, layer.height);
+
+    const originalImageData = ctx.getImageData(0, 0, layer.width, layer.height);
+    const distortedImageData = ctx.createImageData(layer.width, layer.height);
+    const origData = originalImageData.data;
+    const newData = distortedImageData.data;
+
+    const strength = 0.65; 
+    const effectScale = 3.0;
+
+    const getInterpolatedPixel = (x, y) => {
+        const x_floor = Math.floor(x);
+        const y_floor = Math.floor(y);
+        const x_frac = x - x_floor;
+        const y_frac = y - y_floor;
+
+        const p00_idx = (y_floor * layer.width + x_floor) * 4;
+        const p10_idx = (y_floor * layer.width + (x_floor + 1)) * 4;
+        const p01_idx = ((y_floor + 1) * layer.width + x_floor) * 4;
+        const p11_idx = ((y_floor + 1) * layer.width + (x_floor + 1)) * 4;
+
+        const blendedPixel = [0, 0, 0, 255];
+
+        for (let i = 0; i < 3; i++) {
+            const top = origData[p00_idx + i] * (1 - x_frac) + origData[p10_idx + i] * x_frac;
+            const bottom = origData[p01_idx + i] * (1 - x_frac) + origData[p11_idx + i] * x_frac;
+            blendedPixel[i] = top * (1 - y_frac) + bottom * y_frac;
+        }
+        return blendedPixel;
+    };
+
+    newData.set(origData);
+
+    detections.forEach(det => {
+        const landmarks = det.landmarks;
+        const eyeRegions = [landmarks.getLeftEye(), landmarks.getRightEye()];
+
+        eyeRegions.forEach(eyePoints => {
+            const xs = eyePoints.map(p => p.x);
+            const ys = eyePoints.map(p => p.y);
+            const eyeWidth = Math.max(...xs) - Math.min(...xs);
+            const cx = Math.min(...xs) + eyeWidth / 2;
+            const cy = Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) / 2;
+            const radius = (eyeWidth / 2) * effectScale;
+            if (radius === 0) return;
+
+            for (let y = Math.floor(cy - radius); y < Math.ceil(cy + radius); y++) {
+                for (let x = Math.floor(cx - radius); x < Math.ceil(cx + radius); x++) {
+                    if (x < 0 || x >= layer.width || y < 0 || y >= layer.height) continue;
+
+                    const dx = x - cx;
+                    const dy = y - cy;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < radius) {
+                        const normalizedDist = distance / radius;
+                        const r = normalizedDist * (1.0 - strength * (1.0 - normalizedDist));
+                        const angle = Math.atan2(dy, dx);
+                        
+                        const sourceX = cx + r * radius * Math.cos(angle);
+                        const sourceY = cy + r * radius * Math.sin(angle);
+
+                        if (sourceX >= 0 && sourceX < layer.width - 1 && sourceY >= 0 && sourceY < layer.height - 1) {
+                            const pixel = getInterpolatedPixel(sourceX, sourceY);
+                            const destIndex = (y * layer.width + x) * 4;
+                            newData[destIndex]     = pixel[0];
+                            newData[destIndex + 1] = pixel[1];
+                            newData[destIndex + 2] = pixel[2];
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    ctx.putImageData(distortedImageData, 0, 0);
+    img.hidden = true;
+    layer.hidden = false;
+}
+
+</script>
+</body>
+</html>

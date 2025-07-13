@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADHD</title>
+  <link rel="icon" type="image/png" href="favicon.ico">
+  <!-- PIXEL FONT -->
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Firebase SDK (Analytics Only) -->
+  <script src="https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js"></script>
+  <style>
+    /* === START: VIBE FROM THE SECOND CODE (RETRO/PIXELATED) === */
+    :root {
+      --bg: #f2efe8;
+      --ink: #2b2b2b;
+      --mid: #c2c2c2;
+      --light: #faf9f5;
+      --shadow: #7a7a7a;
+      --rainbow: linear-gradient(45deg, #ff0040, #ff8000, #ffff00, #00ff00, #00c0ff, #4000ff, #ff00c0);
+    }
+
+    /* ─── Global Layout ─── */
+    html {
+      zoom: 100%;
+    }
+    body {
+      font-family: 'VT323', monospace;
+      background: url('./assets/wallpaper.png') repeat fixed; 
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 20px;
+      gap: 30px;
+      margin: 0;
+      min-height: 100vh;
+    }
+    h1 {
+      font-size: 5rem;
+      margin: 0;
+      letter-spacing: 2px;
+      text-shadow: 2px 2px var(--mid);
+    }
+    .subtagline {
+        font-size: 1.5rem;
+        color: var(--ink);
+        max-width: 600px;
+        margin: 1rem auto 1.5rem;
+        line-height: 1.4;
+    }
+    .subtagline .highlight {
+      color: var(--ink);
+      background: var(--mid);
+      padding: 0 5px;
+    }
+
+    /* ─── Window Frame ─── */
+    .window {
+      background: var(--light);
+      border: 2px solid var(--ink);
+      box-shadow: 4px 4px 0px var(--ink);
+      display: inline-block;
+      width: 100%;
+      max-width: 800px;
+    }
+    .titlebar {
+      height: 28px;
+      background: var(--mid);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      border-bottom: 2px solid var(--ink);
+      font-size: 20px;
+    }
+    .controls {
+      display: flex;
+      gap: 4px;
+    }
+    .btn-square {
+      width: 16px;
+      height: 16px;
+      background: var(--light);
+      border: 2px solid var(--ink);
+    }
+
+    /* ─── Content & Inputs ─── */
+    .content {
+      padding: 20px;
+      text-align: center;
+    }
+    #adhdAddress {
+      font-family: inherit;
+      font-size: 16px;
+      background: var(--light);
+      border: 2px solid var(--ink);
+      padding: 8px 12px;
+      color: var(--ink);
+      width: 100%;
+      max-width: 480px;
+      text-align: center;
+    }
+    #adhdAddress:focus {
+        outline: 2px dashed var(--ink);
+        outline-offset: 2px;
+    }
+
+    /* ─── NEW STYLES FOR FEATURE WINDOWS ─── */
+    .window-gif {
+      max-width: 100%;
+      height: auto;
+      border: 2px solid var(--ink);
+      margin-bottom: 15px;
+      image-rendering: pixelated;
+      background: var(--mid); /* BG color for while GIF loads */
+    }
+    .window-description {
+      font-size: 1.2rem;
+      line-height: 1.5;
+      margin-top: 0;
+      margin-bottom: 20px;
+      max-width: 550px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    /* ─── END NEW STYLES ─── */
+
+    /* ─── Buttons ─── */
+    .button-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+    .btn-retro {
+      font-family: inherit;
+      font-size: 18px;
+      background: var(--light);
+      border: 2px solid var(--ink);
+      padding: 8px 16px;
+      margin: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--ink);
+      transition: .2s all;
+      box-shadow: 2px 2px 0px var(--shadow);
+    }
+    .btn-retro:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 0px 0px 0px var(--shadow);
+    }
+    .btn-retro:active {
+        transform: translate(2px, 2px);
+        box-shadow: 0px 0px 0px var(--shadow);
+        background: var(--mid);
+    }
+
+    @keyframes rainbowShift {
+      0%, 100% { background-position: 0% 50% }
+      50% { background-position: 100% 50% }
+    }
+
+    .btn-trade:hover {
+      color: #fff;
+      border-color: var(--ink);
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+      background: var(--rainbow);
+      background-size: 300% 300%;
+      animation: rainbowShift 4s linear infinite;
+      box-shadow: 2px 2px 0px var(--ink);
+    }
+
+    /* ─── Notification Popup ─── */
+    .notification-popup {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'VT323', monospace;
+      font-size: 1.2rem;
+      background: var(--light);
+      border: 2px solid var(--ink);
+      box-shadow: 4px 4px 0px var(--ink);
+      padding: 1.5rem 2rem;
+      color: var(--ink);
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+    }
+    .notification-visible {
+      opacity: 1;
+      transform: translate(-50%, -60%);
+    }
+
+    /* === RADIO WIDGET CSS (RETRO STYLE) === */
+    #radio-widget-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1001;
+    }
+    #radio-toggle-btn {
+      width: 50px;
+      height: 50px;
+      background: var(--light);
+      color: var(--ink);
+      border: 2px solid var(--ink);
+      box-shadow: 3px 3px 0 var(--ink);
+      font-size: 1.8rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: all 0.1s ease-in-out;
+    }
+    #radio-toggle-btn:hover {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    #radio-player {
+      display: none;
+      position: absolute;
+      top: -2px;
+      right: 60px;
+      width: 280px;
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+    #radio-player.visible { display: block; }
+    #radio-close-btn {
+      background: none; border: none; font-family: sans-serif;
+      color: var(--ink); font-size: 1.5rem; line-height: 1;
+      cursor: pointer; padding: 0;
+    }
+    #radio-visualizer {
+      width: 100%; height: 50px; background-color: var(--light);
+      border: 2px inset var(--mid); margin-bottom: 10px; image-rendering: pixelated;
+    }
+    #radio-station-name { font-size: 1.2rem; margin-bottom: 5px; }
+    #radio-stream-info { font-size: 1rem; color: var(--shadow); margin-bottom: 15px; }
+    #radio-play-pause-btn {
+      width: 100%; height: 40px; font-family: inherit; font-size: 1.5rem;
+      background: var(--light); border: 2px solid var(--ink);
+      box-shadow: 2px 2px 0 var(--shadow); cursor: pointer;
+      transition: all 0.1s ease-in-out;
+    }
+    #radio-play-pause-btn:hover {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0 var(--shadow);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        body { padding: 20px 10px; }
+        h1 { font-size: 3rem; }
+        .subtagline { font-size: 1.2rem; }
+        .content { padding: 15px; }
+        .window-description { font-size: 1.1rem; }
+        #radio-player { right: -2px; top: 60px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE HEADER -->
+  <h2 style="font-size: 2rem; text-align: center; margin-bottom: 0;">The only token with a clinical diagnosis</h2>
+
+  <!-- MAIN APP WINDOW -->
+  <div class="window">
+    <div class="titlebar">
+      <span>$ADHD Command Center</span>
+      <div class="controls">
+        <div class="btn-square"></div><div class="btn-square"></div>
+      </div>
+    </div>
+    <div class="content">
+      <header>
+        <h1>ADHD</h1>
+        <p class="subtagline">The blockchain better take an Adderall because it just got hit with a serious case of <span class="highlight">ADHD.</span> Made by ADHD degens, for ADHD degens!</p>
+        
+        <div class="button-group">
+          <input id="adhdAddress" type="text" value="7HBcvLbvyeprwDkPQfUB9ZE6xkfWQ8G5JrCZg8NMBMt1" readonly />
+          <button onclick="copyADHD()" class="btn-retro">Copy</button>
+        </div>
+        <div class="button-group">
+            <a href="https://dexscreener.com/solana/h1g9mq8xwavgrdsdfef3k6nkfqmfcvaj71qarxqyb81u" target="_blank" class="btn-retro btn-trade">Trade on Dexscreener</a>
+        </div>
+        <div class="button-group" style="margin-top: 2rem;">
+          <a href="https://t.me/+pfeY3Kx7eAExZWRl" target="_blank" class="btn-retro">Telegram</a>
+          <a href="https://x.com/degen_adhd" target="_blank" class="btn-retro">X / Community</a>
+          <a href="https://chadd.org/" target="_blank" class="btn-retro">ADHD Resources</a>
+        </div>
+
+        <footer style="margin-top: 2.5rem; font-size: 1rem; color: var(--shadow);">
+          $ADHD 2025 - Probably not financial advice, wait what was I doing here?
+        </footer>
+      </header>
+    </div>
+  </div>
+
+  <!-- NEW WINDOW 1: MEME MAKER -->
+  <div class="window">
+    <div class="titlebar">
+      <span>Make ADHD Memes</span>
+      <div class="controls">
+        <div class="btn-square"></div><div class="btn-square"></div>
+      </div>
+    </div>
+    <div class="content">
+      <img src="./assets/maker-gif.gif" alt="Animation of the ADHD meme maker tool in action" class="window-gif">
+      <p class="window-description">Unleash your inner degen. Upload any background, slap on our custom characters, and add your own text to create the next viral meme. It's that easy.</p>
+      <a href="maker.html" class="btn-retro" target="_blank">Launch Meme Maker</a>
+    </div>
+  </div>
+
+  <!-- NEW WINDOW 2: ADHDify FILTER -->
+  <div class="window">
+    <div class="titlebar">
+      <span>ADHDify Magic Filter</span>
+      <div class="controls">
+        <div class="btn-square"></div><div class="btn-square"></div>
+      </div>
+    </div>
+    <div class="content">
+      <img src="./assets/ADHDify-gif.gif" alt="Animation showing the ADHDify filter adding brains and eyes to a photo" class="window-gif">
+      <p class="window-description">Our AI-powered filter finds faces in your photos and instantly gives them a dose of ADHD, complete with a toy brain and goofy eyes. Try it on your favorite characters!</p>
+      <a href="ADHDify.html" class="btn-retro" target="_blank">Try the Filter</a>
+    </div>
+  </div>
+  
+  <!-- RADIO WIDGET HTML -->
+  <div id="radio-widget-container">
+    <button id="radio-toggle-btn" title="Toggle Radio Player"><i class="fas fa-music"></i></button>
+    <div id="radio-player" class="window">
+        <div class="titlebar">
+            <span>Radio Player</span>
+            <button id="radio-close-btn" title="Close Player">×</button>
+        </div>
+        <div class="content" style="padding: 15px;">
+            <canvas id="radio-visualizer"></canvas>
+            <div id="radio-station-name">SomaFM: Groove Salad</div>
+            <div id="radio-stream-info">Chilled Downtempo</div>
+            <div style="font-size: 0.9rem; color: var(--shadow); margin-top: -10px; margin-bottom: 15px;">Sponsored by Adderall</div>
+            <button id="radio-play-pause-btn"></button>
+        </div>
+    </div>
+  </div>
+  <audio id="radio-audio-source" crossorigin="anonymous"></audio>
+
+  <!-- NOTIFICATION POPUP HTML -->
+  <div id="notification-popup" class="notification-popup"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.5.0/firebase-analytics.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAo6_0DUw8OMm4aiNxUtxO7Q660GowCr4o",
+      authDomain: "officialdoit.firebaseapp.com",
+      projectId: "officialdoit",
+      storageBucket: "officialdoit.firebasestorage.app",
+      messagingSenderId: "1034242279014",
+      appId: "1:1034242279014:web:30efccc9b08acb3a98cfa7",
+      measurementId: "G-NVSJD6HC3F"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+
+    // General page functions
+    function showNotification(message) {
+      const notification = document.getElementById('notification-popup');
+      notification.textContent = message;
+      notification.classList.add('notification-visible');
+      setTimeout(() => { notification.classList.remove('notification-visible'); }, 2000);
+    }
+    
+    function copyADHD() {
+      const input = document.getElementById('adhdAddress');
+      input.select();
+      input.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(input.value).then(() => {
+        showNotification('Copied $ADHD contract address!');
+      }).catch(err => { console.error('Failed to copy:', err); });
+    }
+    window.copyADHD = copyADHD;
+
+    // === START: RADIO PLAYER LOGIC ===
+    const radioPlayer = document.getElementById('radio-player');
+    const toggleBtn = document.getElementById('radio-toggle-btn');
+    const closeBtn = document.getElementById('radio-close-btn');
+    const audio = document.getElementById('radio-audio-source');
+    const playPauseBtn = document.getElementById('radio-play-pause-btn');
+    
+    const streamUrl = 'http://ice1.somafm.com/groovesalad-128-mp3';
+    audio.src = streamUrl;
+
+    let isPlaying = false;
+    let audioContext;
+    let analyser;
+
+    function toggleRadioPlayer() {
+        radioPlayer.classList.toggle('visible');
+    }
+    toggleBtn.addEventListener('click', toggleRadioPlayer);
+    closeBtn.addEventListener('click', () => radioPlayer.classList.remove('visible'));
+
+    function playStream() {
+        if (!audioContext) {
+            setupVisualizer();
+        }
+        audio.play().catch(e => {
+            console.error("Audio Playback Error:", e);
+            showNotification("Error playing audio.");
+        });
+    }
+    function pauseStream() {
+        audio.pause();
+    }
+    
+    audio.onplaying = () => {
+        isPlaying = true;
+        playPauseBtn.innerHTML = '❚❚';
+    };
+    audio.onpause = () => {
+        isPlaying = false;
+        playPauseBtn.innerHTML = '►';
+    };
+
+    playPauseBtn.addEventListener('click', () => {
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
+        isPlaying ? pauseStream() : playStream();
+    });
+
+    playPauseBtn.innerHTML = '►'; // Initial state
+
+    // Visualizer Logic
+    const canvas = document.getElementById('radio-visualizer');
+    const canvasCtx = canvas.getContext('2d');
+    function setupVisualizer() {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+        analyser.fftSize = 64; // Fewer bars for a chunkier, retro look
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        drawVisualizer(bufferLength, dataArray);
+    }
+
+    function drawVisualizer(bufferLength, dataArray) {
+        requestAnimationFrame(() => drawVisualizer(bufferLength, dataArray));
+        if(!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+
+        canvasCtx.fillStyle = '#faf9f5'; // var(--light)
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const barWidth = (canvas.width / bufferLength);
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const barHeight = dataArray[i] / 2;
+            
+            canvasCtx.fillStyle = '#2b2b2b'; // var(--ink)
+            canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+            x += barWidth; // No gap for a solid, blocky look
+        }
+    }
+    // === END: RADIO PLAYER LOGIC ===
+  </script>
+</body>
+</html>
