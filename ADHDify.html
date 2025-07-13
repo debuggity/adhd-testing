@@ -130,6 +130,43 @@
 
   /* status text */
   #status{margin-top:12px;color:var(--shadow);font-size:18px}
+
+  @media (max-width: 768px) {
+    html {
+      zoom: normal; /* remove the fixed zoom on mobile */
+    }
+
+    body {
+      padding: 20px 10px; /* reduce padding on smaller screens */
+      gap: 20px;
+    }
+
+    h2 {
+      font-size: 24px; /* slightly smaller title */
+      text-align: center;
+    }
+
+    .window {
+      width: 100%; /* allow the window to take the full width */
+      max-width: 500px; /* but not get too wide on tablets */
+      box-sizing: border-box;
+    }
+
+    .content {
+      padding: 15px; /* reduce content padding */
+    }
+      
+    /* make the button bar wrap nicely */
+    .content button, .content input[type=file] {
+      flex-grow: 1; /* allow buttons to grow and fill space */
+      font-size: 14px; /* smaller font for more compact buttons */
+    }
+      
+    #wrap {
+      /* ensure the image container doesn't overflow its parent */
+      max-width: 100%; 
+    }
+  }
   </style>
 </head>
 <body>
@@ -192,513 +229,507 @@
     </div>
   </div>
 
-<script>
-const MODEL_URL='./model/';
-const pick=document.getElementById('pick');
-const runBtn=document.getElementById('run');
-const ultraRunBtn=document.getElementById('ultraRun');
-const addBtn=document.getElementById('addHat');
-const deleteBtn=document.getElementById('deleteHat');
-const dlBtn=document.getElementById('download');
-const img=document.getElementById('shot');
-const layer=document.getElementById('layer');
-const info=document.getElementById('status');
-const wrap=document.getElementById('wrap');
+  <script>
+    const MODEL_URL='./model/';
+    const pick=document.getElementById('pick');
+    const runBtn=document.getElementById('run');
+    const ultraRunBtn=document.getElementById('ultraRun');
+    const addBtn=document.getElementById('addHat');
+    const deleteBtn=document.getElementById('deleteHat');
+    const dlBtn=document.getElementById('download');
+    const img=document.getElementById('shot');
+    const layer=document.getElementById('layer');
+    const info=document.getElementById('status');
+    const wrap=document.getElementById('wrap');
 
-const hatSrc='./assets/hat.png';
-const hatBase=new Image(); hatBase.src=hatSrc;
+    const hatSrc='./assets/hat.png';
+    const hatBase=new Image(); hatBase.src=hatSrc;
 
-const hats=[];
-let selectedHat = null;
-const OVERHANG=.75;
+    const hats=[];
+    let selectedHat = null;
+    const OVERHANG=.75;
 
-// --- INITIALIZATION ---
-(async()=>{
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
-  ]);
-  updateUIState();
-})();
+    // --- NEW: A global scale factor to bridge the gap between image and screen coordinates ---
+    let coordinateScale = 1;
 
-function clearHats() {
-  hats.forEach(h=>h.remove());
-  hats.length=0;
-  selectHat(null);
-}
+    // --- INITIALIZATION ---
+    (async()=>{
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL)
+      ]);
+      updateUIState();
+    })();
 
-function clearOverlays() {
-    clearHats();
-    // Clear the canvas, hide it, and show the original image
-    const ctx = layer.getContext('2d');
-    ctx.clearRect(0, 0, layer.width, layer.height);
-    layer.hidden = true;
-    img.hidden = false;
-}
+    // --- NEW: Function to re-calculate scale and update hat visuals on resize ---
+    function updateScaleAndHatPositions() {
+        if (img.hidden || !img.naturalWidth) return;
 
-function updateUIState() {
-    const hasImage = !img.hidden || !layer.hidden;
-    const hasDistortion = !layer.hidden;
-    const hasHats = hats.length > 0;
+        // Calculate the crucial scale factor
+        coordinateScale = img.naturalWidth / wrap.clientWidth;
 
-    runBtn.disabled = !hasImage;
-    ultraRunBtn.disabled = !hasImage;
-    addBtn.disabled = !hasImage;
-    deleteBtn.disabled = !selectedHat;
-    dlBtn.disabled = !hasImage || (!hasHats && !hasDistortion);
-
-    // Reset color for standard messages
-    info.style.color = '';
-
-    if (selectedHat) {
-        info.textContent = 'Drag, pinch, or rotate the selected hat. Use handles to resize.';
-    } else if (hasHats || hasDistortion) {
-        let parts = [];
-        if (hasHats) parts.push(`${hats.length} hat(s) placed`);
-        if (hasDistortion) parts.push('eyes distorted');
-        info.textContent = parts.join(' and ') + '. Click a hat to select it.';
-    } else if (hasImage) {
-        info.textContent = 'Image loaded. Click a button to begin.';
-    } else {
-        info.textContent = 'models ready — choose an image';
+        // Reposition all hats according to the new scale
+        hats.forEach(h => {
+            const data = h.dataset;
+            h.style.left = `${parseFloat(data.x) / coordinateScale}px`;
+            h.style.top = `${parseFloat(data.y) / coordinateScale}px`;
+            h.style.width = `${parseFloat(data.w) / coordinateScale}px`;
+            h.style.height = `${parseFloat(data.h) / coordinateScale}px`;
+        });
     }
-}
 
-function selectHat(hatElement) {
-    if (selectedHat) {
-        selectedHat.classList.remove('selected');
+
+    function clearHats() {
+      hats.forEach(h=>h.remove());
+      hats.length=0;
+      selectHat(null);
     }
-    selectedHat = hatElement;
-    if (selectedHat) {
-        selectedHat.classList.add('selected');
-    }
-    updateUIState();
-}
 
-const MAX_DIMENSION = 1920;
-
-// --- EVENT LISTENERS ---
-pick.addEventListener('change', () => {
-    const f = pick.files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = e => {
-        clearOverlays();
-        img.src = e.target.result; // This triggers the 'load' event handler below
-        img.hidden = false;
+    function clearOverlays() {
+        clearHats();
+        const ctx = layer.getContext('2d');
+        ctx.clearRect(0, 0, layer.width, layer.height);
         layer.hidden = true;
-        info.style.color = ''; // Reset color on new image load
-        info.textContent = 'Loading image...'; // Give user feedback
-    };
-    r.readAsDataURL(f);
-});
+        img.hidden = false;
+    }
 
-img.addEventListener('load', () => {
-    let w = img.naturalWidth;
-    let h = img.naturalHeight;
+    function updateUIState() {
+        const hasImage = !img.hidden || !layer.hidden;
+        const hasDistortion = !layer.hidden;
+        const hasHats = hats.length > 0;
 
-    if (w <= MAX_DIMENSION && h <= MAX_DIMENSION) {
-        wrap.style.width = w + 'px';
-        wrap.style.height = h + 'px';
-        layer.width = w;
-        layer.height = h;
+        runBtn.disabled = !hasImage;
+        ultraRunBtn.disabled = !hasImage;
+        addBtn.disabled = !hasImage;
+        deleteBtn.disabled = !selectedHat;
+        dlBtn.disabled = !hasImage || (!hasHats && !hasDistortion);
+
+        info.style.color = '';
+
+        if (selectedHat) {
+            info.textContent = 'Drag, pinch, or rotate the selected hat. Use handles to resize.';
+        } else if (hasHats || hasDistortion) {
+            let parts = [];
+            if (hasHats) parts.push(`${hats.length} hat(s) placed`);
+            if (hasDistortion) parts.push('eyes distorted');
+            info.textContent = parts.join(' and ') + '. Click a hat to select it.';
+        } else if (hasImage) {
+            info.textContent = 'Image loaded. Click a button to begin.';
+        } else {
+            info.textContent = 'models ready — choose an image';
+        }
+    }
+
+    function selectHat(hatElement) {
+        if (selectedHat) {
+            selectedHat.classList.remove('selected');
+        }
+        selectedHat = hatElement;
+        if (selectedHat) {
+            selectedHat.classList.add('selected');
+        }
         updateUIState();
-        return;
     }
 
-    info.textContent = `Resizing image to fit ${MAX_DIMENSION}px...`;
+    const MAX_DIMENSION = 1920;
 
-    const ratio = w / h;
-    if (w > h) {
-        w = MAX_DIMENSION;
-        h = Math.round(w / ratio);
-    } else {
-        h = MAX_DIMENSION;
-        w = Math.round(h * ratio);
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, w, h);
-
-    img.src = canvas.toDataURL('image/jpeg', 0.92);
-});
-
-wrap.addEventListener('click', (e) => {
-    if (e.target === wrap || e.target === img || e.target === layer) {
-        selectHat(null);
-    }
-});
-
-runBtn.addEventListener('click',async()=>{
-  runBtn.disabled=true;
-  ultraRunBtn.disabled=true;
-  info.style.color = ''; // Reset color from any previous error
-  info.textContent='detecting…';
-  await Promise.all([img.decode(),hatBase.decode()]);
-
-  // --- NEW: 3-Tier Detection Cascade ---
-  // Tier 1: High confidence, multiple faces
-  let dets = await faceapi.detectAllFaces(
-    img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .45 })
-  );
-  
-  // Tier 2: Medium confidence, multiple faces
-  if (!dets.length) {
-    info.textContent = 'detecting (tier 2)…';
-    dets = await faceapi.detectAllFaces(
-      img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .25 })
-    );
-  }
-
-  // Tier 3: Low confidence, best single face
-  if (!dets.length) {
-    info.textContent = 'detecting (tier 3)…';
-    const loose = await faceapi.detectAllFaces(
-      img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 })
-    );
-    if (loose.length) {
-      loose.sort((a,b) => b.score - a.score);
-      dets = [loose[0]];
-    }
-  }
-
-  clearOverlays();
-
-  // --- NEW: Handle failure with red message ---
-  if(!dets.length){
-    info.style.color = '#cc4444'; // A distinct red, from delete button
-    info.textContent = 'Could not find a face. Please try a clearer image!';
-    // Manually re-enable buttons, as updateUIState would overwrite our message
-    const hasImage = !img.hidden;
-    runBtn.disabled = !hasImage;
-    ultraRunBtn.disabled = !hasImage;
-    return;
-  }
-
-  dets.forEach(({box})=>addHat({box}));
-  selectHat(hats[hats.length-1]);
-  updateUIState();
-});
-
-
-ultraRunBtn.addEventListener('click', async () => {
-  runBtn.disabled = ultraRunBtn.disabled = true;
-  info.style.color = ''; // Reset color from any previous error
-  info.textContent = 'ULTRA detecting…';
-  await Promise.all([img.decode(), hatBase.decode()]);
-
-  // --- NEW: 3-Tier Detection Cascade for ULTRA ---
-  // Tier 1: High confidence
-  let dets = await faceapi
-    .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .4 }))
-    .withFaceLandmarks(true);
-
-  // Tier 2: Medium confidence
-  if (!dets.length) {
-    info.textContent = 'ULTRA detecting (tier 2)…';
-    dets = await faceapi
-      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .2 }))
-      .withFaceLandmarks(true);
-  }
-
-  // Tier 3: Low confidence, best-of
-  if (!dets.length) {
-    info.textContent = 'ULTRA detecting (tier 3)…';
-    const loose = await faceapi
-      .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 }))
-      .withFaceLandmarks(true);
-    if (loose.length) {
-      loose.sort((a, b) => b.detection.score - a.detection.score);
-      dets = [loose[0]];
-    }
-  }
-
-  clearOverlays();
-
-  // --- NEW: Handle failure with red message ---
-  if (!dets.length) {
-    info.style.color = '#cc4444'; // A distinct red
-    info.textContent = 'Could not find a face for ULTRA mode. Try a clearer image!';
-    // Manually re-enable buttons
-    const hasImage = !img.hidden;
-    runBtn.disabled = !hasImage;
-    ultraRunBtn.disabled = !hasImage;
-    return;
-  }
-
-  // add hats & distort
-  dets.forEach(det => addHat({ box: det.detection.box }));
-  distortEyes(dets);
-
-  selectHat(hats[hats.length - 1] || null);
-  updateUIState();
-});
-
-
-
-addBtn.addEventListener('click', () => {
-    addHat({});
-    selectHat(hats[hats.length-1]);
-    updateUIState();
-});
-
-deleteBtn.addEventListener('click', () => {
-    if (!selectedHat) return;
-
-    const index = hats.indexOf(selectedHat);
-    if(index > -1) {
-        hats.splice(index, 1);
-    }
-    selectedHat.remove();
-    selectHat(null);
-    updateUIState();
-});
-
-dlBtn.addEventListener('click',()=>{
-  const hasDistortion = !layer.hidden;
-  const hasHats = hats.length > 0;
-  if(!hasHats && !hasDistortion) return;
-
-  const out=document.createElement('canvas');
-  out.width=img.naturalWidth;
-  out.height=img.naturalHeight;
-  const ctx=out.getContext('2d');
-
-  // 1. Draw the base image (either original or distorted one from the layer canvas)
-  const baseImage = hasDistortion ? layer : img;
-  ctx.drawImage(baseImage, 0, 0);
-
-  // 2. Draw hats on top, now with scale
-  hats.forEach(h=>{
-    const{x, y, w, h:ht, rot, scale}=Object.fromEntries(Object.entries(h.dataset).map(([k,v])=>[k,parseFloat(v)]));
-    ctx.save();
-    ctx.translate(x+w/2,y+ht/2);
-    ctx.rotate(rot*Math.PI/180);
-    ctx.scale(scale, scale);
-    ctx.drawImage(hatBase,-w/2,-ht/2,w,ht);
-    ctx.restore();
-  });
-
-  const link=document.createElement('a');
-  link.href=out.toDataURL('image/png');
-  link.download='face-hats-ultra.png';
-  link.click();
-});
-
-
-// --- HAT MANIPULATION ---
-function clampPos({x,y,w,h}){
-  const maxX=wrap.clientWidth-w*(1-OVERHANG);
-  const minX=-w*OVERHANG;
-  const maxY=wrap.clientHeight-h*(1-OVERHANG);
-  const minY=-h*OVERHANG;
-  return{ x:Math.min(Math.max(x,minX),maxX),
-          y:Math.min(Math.max(y,minY),maxY) };
-}
-
-function addHat({box}){
-  const h=document.createElement('img');
-  h.src=hatSrc; h.className='hat';
-
-  let w, ht, x, y;
-
-  if (box) {
-    w=box.width*1.25;
-    ht=hatBase.naturalHeight/hatBase.naturalWidth*w*1.25;
-    x=box.x+box.width/2-w/2;
-    y=box.y-ht*.95;
-  } else {
-    w = img.naturalWidth / 4;
-    ht = hatBase.naturalHeight / hatBase.naturalWidth * w;
-    x = (wrap.clientWidth / 2) - (w / 2);
-    y = (wrap.clientHeight / 2) - (ht / 2);
-  }
-
-  ({x,y}=clampPos({x,y,w:w,h:ht}));
-
-  Object.assign(h.style,{width:w+'px',height:ht+'px',left:x+'px',top:y+'px',transform:'rotate(0deg) scale(1)'});
-  Object.assign(h.dataset,{x,y,w,h:ht,rot:0, scale:1});
-
-  h.addEventListener('click', (e) => {
-    e.stopPropagation();
-    selectHat(h);
-  });
-
-  h.addEventListener('wheel',e=>{
-    if (selectedHat !== h) return;
-    e.preventDefault();
-    const ang=(+h.dataset.rot)+e.deltaY*.05;
-    const scale = +h.dataset.scale;
-    h.dataset.rot=ang;
-    h.style.transform=`rotate(${ang}deg) scale(${scale})`;
-  });
-
-  const delBtn = document.createElement('div');
-  delBtn.className = 'delete-btn';
-  delBtn.innerHTML = '×';
-  delBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const index = hats.indexOf(h);
-    if(index > -1) hats.splice(index, 1);
-    h.remove();
-    selectHat(null);
-    updateUIState();
-  });
-  h.appendChild(delBtn);
-
-  wrap.appendChild(h); hats.push(h);
-
-  interact(h)
-    .draggable({
-      listeners:{move(ev){
-        let x=+h.dataset.x+ev.dx;
-        let y=+h.dataset.y+ev.dy;
-        ({x,y}=clampPos({x,y,w:+h.dataset.w,h:+h.dataset.h}));
-        Object.assign(h.dataset,{x,y});
-        h.style.left=x+'px'; h.style.top=y+'px';
-      }}
-    })
-    .resizable({
-        edges:{left:true,right:true,top:true,bottom:true},
-        listeners: {
-            move(ev) {
-                let{width,height}=ev.rect;
-                let x=+h.dataset.x+ev.deltaRect.left;
-                let y=+h.dataset.y+ev.deltaRect.top;
-                ({x,y}=clampPos({x,y,w:width,h:height}));
-                Object.assign(h.dataset,{x,y,w:width,h:height});
-                Object.assign(h.style,{left:x+'px',top:y+'px',width:width+'px',height:height+'px'});
-            }
-        },
-        modifiers: [
-            interact.modifiers.aspectRatio({
-                ratio: 'preserve',
-                equalDelta: true,
-            }),
-        ],
-    })
-    .gesturable({
-        listeners: {
-            move (ev) {
-                const h = ev.target;
-                if(selectedHat !== h) return;
-
-                let angle = parseFloat(h.dataset.rot) + ev.da;
-                let scale = parseFloat(h.dataset.scale) * (1 + ev.ds);
-
-                h.style.transform = 'rotate(' + angle + 'deg) scale(' + scale + ')';
-
-                h.dataset.rot = angle;
-                h.dataset.scale = scale;
-            }
-        }
-    })
-    .on('tap', () => {
-      selectHat(h);
+    // --- EVENT LISTENERS ---
+    pick.addEventListener('change', () => {
+        const f = pick.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = e => {
+            clearOverlays();
+            img.src = e.target.result; 
+            img.hidden = false;
+            layer.hidden = true;
+            info.style.color = '';
+            info.textContent = 'Loading image...';
+        };
+        r.readAsDataURL(f);
     });
-}
 
-// --- NEW & IMPROVED function to distort eyes with a smooth bulge effect ---
-function distortEyes(detections) {
-    const ctx = layer.getContext('2d');
-    ctx.drawImage(img, 0, 0, layer.width, layer.height);
+    img.addEventListener('load', () => {
+        let w = img.naturalWidth;
+        let h = img.naturalHeight;
 
-    const originalImageData = ctx.getImageData(0, 0, layer.width, layer.height);
-    const distortedImageData = ctx.createImageData(layer.width, layer.height);
-    const origData = originalImageData.data;
-    const newData = distortedImageData.data;
+        const needsResize = w > MAX_DIMENSION || h > MAX_DIMENSION;
 
-    // A strength of 0.5 is a good starting point for the bulge
-    const strength = 0.65; 
-    const effectScale = 3.0; // Controls how far the bulge extends past the eye
-
-    // Helper function for bilinear interpolation. This is the key to smoothness!
-    const getInterpolatedPixel = (x, y) => {
-        const x_floor = Math.floor(x);
-        const y_floor = Math.floor(y);
-        const x_frac = x - x_floor;
-        const y_frac = y - y_floor;
-
-        // Get the four surrounding pixels
-        const p00_idx = (y_floor * layer.width + x_floor) * 4;
-        const p10_idx = (y_floor * layer.width + (x_floor + 1)) * 4;
-        const p01_idx = ((y_floor + 1) * layer.width + x_floor) * 4;
-        const p11_idx = ((y_floor + 1) * layer.width + (x_floor + 1)) * 4;
-
-        const blendedPixel = [0, 0, 0, 255]; // R, G, B, A
-
-        for (let i = 0; i < 3; i++) { // For R, G, B channels
-             // Interpolate horizontally for top and bottom
-            const top = origData[p00_idx + i] * (1 - x_frac) + origData[p10_idx + i] * x_frac;
-            const bottom = origData[p01_idx + i] * (1 - x_frac) + origData[p11_idx + i] * x_frac;
-            // Interpolate vertically
-            blendedPixel[i] = top * (1 - y_frac) + bottom * y_frac;
+        // This block now just handles resizing the source image if needed.
+        // The visual scaling is handled separately.
+        if (needsResize) {
+            info.textContent = `Resizing image to fit ${MAX_DIMENSION}px...`;
+            const ratio = w / h;
+            if (w > h) {
+                w = MAX_DIMENSION;
+                h = Math.round(w / ratio);
+            } else {
+                h = MAX_DIMENSION;
+                w = Math.round(h * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            img.src = canvas.toDataURL('image/jpeg', 0.92);
+            // Let the 'load' event run again for the resized image
+            return; 
         }
-        return blendedPixel;
-    };
+        
+        // Set container and canvas dimensions based on the final image
+        wrap.style.width = img.naturalWidth + 'px'; // Set a base width
+        wrap.style.height = img.naturalHeight + 'px'; // Set a base height
+        layer.width = img.naturalWidth;
+        layer.height = img.naturalHeight;
+
+        updateUIState();
+        // --- NEW: CRITICAL call to set the initial scale ---
+        updateScaleAndHatPositions();
+    });
+
+    // --- NEW: Listen for window resize to update the scale dynamically ---
+    window.addEventListener('resize', updateScaleAndHatPositions);
 
 
-    // First, copy the original image to the new data buffer.
-    // We will only overwrite the pixels in the distorted areas.
-    newData.set(origData);
+    wrap.addEventListener('click', (e) => {
+        if (e.target === wrap || e.target === img || e.target === layer) {
+            selectHat(null);
+        }
+    });
 
-    detections.forEach(det => {
-        const landmarks = det.landmarks;
-        const eyeRegions = [landmarks.getLeftEye(), landmarks.getRightEye()];
+    runBtn.addEventListener('click',async()=>{
+      runBtn.disabled=true;
+      ultraRunBtn.disabled=true;
+      info.style.color = '';
+      info.textContent='detecting…';
+      await Promise.all([img.decode(),hatBase.decode()]);
 
-        eyeRegions.forEach(eyePoints => {
-            const xs = eyePoints.map(p => p.x);
-            const ys = eyePoints.map(p => p.y);
-            const eyeWidth = Math.max(...xs) - Math.min(...xs);
-            const cx = Math.min(...xs) + eyeWidth / 2;
-            const cy = Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) / 2;
-            const radius = (eyeWidth / 2) * effectScale;
-            if (radius === 0) return;
+      let dets = await faceapi.detectAllFaces(
+        img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .45 })
+      );
+      if (!dets.length) {
+        info.textContent = 'detecting (tier 2)…';
+        dets = await faceapi.detectAllFaces(
+          img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .25 })
+        );
+      }
+      if (!dets.length) {
+        info.textContent = 'detecting (tier 3)…';
+        const loose = await faceapi.detectAllFaces(
+          img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 })
+        );
+        if (loose.length) {
+          loose.sort((a,b) => b.score - a.score);
+          dets = [loose[0]];
+        }
+      }
 
-            // Iterate over the pixels in the effect's bounding box
-            for (let y = Math.floor(cy - radius); y < Math.ceil(cy + radius); y++) {
-                for (let x = Math.floor(cx - radius); x < Math.ceil(cx + radius); x++) {
-                    if (x < 0 || x >= layer.width || y < 0 || y >= layer.height) continue;
+      clearOverlays();
 
-                    const dx = x - cx;
-                    const dy = y - cy;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
+      if(!dets.length){
+        info.style.color = '#cc4444';
+        info.textContent = 'Could not find a face. Please try a clearer image!';
+        const hasImage = !img.hidden;
+        runBtn.disabled = !hasImage;
+        ultraRunBtn.disabled = !hasImage;
+        return;
+      }
 
-                    if (distance < radius) {
-                        // This is the core of the bulge effect
-                        const normalizedDist = distance / radius;
-                        
-                        // A smoothstep-like curve for a nice falloff
-                        const r = normalizedDist * (1.0 - strength * (1.0 - normalizedDist));
-                        
-                        const angle = Math.atan2(dy, dx);
-                        
-                        const sourceX = cx + r * radius * Math.cos(angle);
-                        const sourceY = cy + r * radius * Math.sin(angle);
+      dets.forEach(({box})=>addHat({box}));
+      selectHat(hats[hats.length-1]);
+      updateUIState();
+    });
 
-                        if (sourceX >= 0 && sourceX < layer.width - 1 && sourceY >= 0 && sourceY < layer.height - 1) {
-                            const pixel = getInterpolatedPixel(sourceX, sourceY);
-                            const destIndex = (y * layer.width + x) * 4;
-                            newData[destIndex]     = pixel[0]; // R
-                            newData[destIndex + 1] = pixel[1]; // G
-                            newData[destIndex + 2] = pixel[2]; // B
-                            // Alpha (newData[destIndex + 3]) is already 255
+
+    ultraRunBtn.addEventListener('click', async () => {
+      runBtn.disabled = ultraRunBtn.disabled = true;
+      info.style.color = '';
+      info.textContent = 'ULTRA detecting…';
+      await Promise.all([img.decode(), hatBase.decode()]);
+
+      let dets = await faceapi
+        .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .4 }))
+        .withFaceLandmarks(true);
+      if (!dets.length) {
+        info.textContent = 'ULTRA detecting (tier 2)…';
+        dets = await faceapi
+          .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .2 }))
+          .withFaceLandmarks(true);
+      }
+      if (!dets.length) {
+        info.textContent = 'ULTRA detecting (tier 3)…';
+        const loose = await faceapi
+          .detectAllFaces(img, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: .1 }))
+          .withFaceLandmarks(true);
+        if (loose.length) {
+          loose.sort((a, b) => b.detection.score - a.detection.score);
+          dets = [loose[0]];
+        }
+      }
+
+      clearOverlays();
+
+      if (!dets.length) {
+        info.style.color = '#cc4444';
+        info.textContent = 'Could not find a face for ULTRA mode. Try a clearer image!';
+        const hasImage = !img.hidden;
+        runBtn.disabled = !hasImage;
+        ultraRunBtn.disabled = !hasImage;
+        return;
+      }
+
+      dets.forEach(det => addHat({ box: det.detection.box }));
+      distortEyes(dets);
+
+      selectHat(hats[hats.length - 1] || null);
+      updateUIState();
+    });
+
+    addBtn.addEventListener('click', () => {
+        addHat({});
+        selectHat(hats[hats.length-1]);
+        updateUIState();
+    });
+
+    deleteBtn.addEventListener('click', () => {
+        if (!selectedHat) return;
+        const index = hats.indexOf(selectedHat);
+        if(index > -1) {
+            hats.splice(index, 1);
+        }
+        selectedHat.remove();
+        selectHat(null);
+        updateUIState();
+    });
+
+    dlBtn.addEventListener('click',()=>{
+      const hasDistortion = !layer.hidden;
+      const hasHats = hats.length > 0;
+      if(!hasHats && !hasDistortion) return;
+
+      const out=document.createElement('canvas');
+      out.width=img.naturalWidth;
+      out.height=img.naturalHeight;
+      const ctx=out.getContext('2d');
+      
+      const baseImage = hasDistortion ? layer : img;
+      ctx.drawImage(baseImage, 0, 0);
+
+      // MODIFIED: This part now works perfectly because the dataset values
+      // are the TRUE image coordinates, which is what the canvas needs.
+      hats.forEach(h=>{
+        const{x, y, w, h:ht, rot, scale}=Object.fromEntries(Object.entries(h.dataset).map(([k,v])=>[k,parseFloat(v)]));
+        ctx.save();
+        ctx.translate(x+w/2,y+ht/2);
+        ctx.rotate(rot*Math.PI/180);
+        ctx.scale(scale, scale);
+        ctx.drawImage(hatBase,-w/2,-ht/2,w,ht);
+        ctx.restore();
+      });
+
+      const link=document.createElement('a');
+      link.href=out.toDataURL('image/png');
+      link.download='face-hats-ultra.png';
+      link.click();
+    });
+
+
+    // --- MODIFIED: `clampPos` now uses the image's real dimensions ---
+    function clampPos({x,y,w,h}){
+      const maxX=img.naturalWidth-w*(1-OVERHANG);
+      const minX=-w*OVERHANG;
+      const maxY=img.naturalHeight-h*(1-OVERHANG);
+      const minY=-h*OVERHANG;
+      return{ x:Math.min(Math.max(x,minX),maxX),
+              y:Math.min(Math.max(y,minY),maxY) };
+    }
+
+    // --- MODIFIED: `addHat` now stores TRUE coordinates in the dataset and calculates SCALED styles ---
+    function addHat({box}){
+      const h=document.createElement('img');
+      h.src=hatSrc; h.className='hat';
+
+      let trueW, trueH, trueX, trueY;
+
+      // All calculations are based on the image's natural dimensions
+      if (box) {
+        trueW = box.width*1.25;
+        trueH = hatBase.naturalHeight/hatBase.naturalWidth * trueW * 1.25;
+        trueX = box.x+box.width/2 - trueW/2;
+        trueY = box.y-trueH*.95;
+      } else {
+        trueW = img.naturalWidth / 4;
+        trueH = hatBase.naturalHeight / hatBase.naturalWidth * trueW;
+        trueX = (img.naturalWidth / 2) - (trueW / 2);
+        trueY = (img.naturalHeight / 2) - (trueH / 2);
+      }
+
+      ({x: trueX, y: trueY} = clampPos({x: trueX, y: trueY, w: trueW, h: trueH}));
+
+      // Store TRUE image coordinates in the dataset
+      Object.assign(h.dataset, {x: trueX, y: trueY, w: trueW, h: trueH, rot: 0, scale: 1});
+      
+      // Set the visual style based on the CURRENT scale factor
+      Object.assign(h.style,{
+          width: `${trueW / coordinateScale}px`,
+          height: `${trueH / coordinateScale}px`,
+          left: `${trueX / coordinateScale}px`,
+          top: `${trueY / coordinateScale}px`,
+          transform:'rotate(0deg) scale(1)'
+      });
+
+      h.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectHat(h);
+      });
+
+      h.addEventListener('wheel',e=>{
+        if (selectedHat !== h) return;
+        e.preventDefault();
+        const ang=(+h.dataset.rot)+e.deltaY*.05;
+        const scale = +h.dataset.scale;
+        h.dataset.rot=ang;
+        h.style.transform=`rotate(${ang}deg) scale(${scale})`;
+      });
+
+      const delBtn = document.createElement('div');
+      delBtn.className = 'delete-btn';
+      delBtn.innerHTML = '×';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const index = hats.indexOf(h);
+        if(index > -1) hats.splice(index, 1);
+        h.remove();
+        selectHat(null);
+        updateUIState();
+      });
+      h.appendChild(delBtn);
+
+      wrap.appendChild(h); hats.push(h);
+
+      interact(h)
+        .draggable({
+          listeners:{move(ev){
+            // --- MODIFIED: Convert screen movement (ev.dx) to image coordinate movement ---
+            let x = parseFloat(h.dataset.x) + (ev.dx * coordinateScale);
+            let y = parseFloat(h.dataset.y) + (ev.dy * coordinateScale);
+            
+            ({x,y} = clampPos({x, y, w: +h.dataset.w, h: +h.dataset.h}));
+            
+            Object.assign(h.dataset,{x,y});
+            // Update visual style based on the new scaled position
+            h.style.left = `${x / coordinateScale}px`;
+            h.style.top = `${y / coordinateScale}px`;
+          }}
+        })
+        .resizable({
+            edges:{left:true,right:true,top:true,bottom:true},
+            listeners: {
+                move(ev) {
+                    // --- MODIFIED: Convert screen resize (ev.rect) to image coordinate resize ---
+                    const newTrueWidth = ev.rect.width * coordinateScale;
+                    const newTrueHeight = ev.rect.height * coordinateScale;
+                    let x = parseFloat(h.dataset.x) + (ev.deltaRect.left * coordinateScale);
+                    let y = parseFloat(h.dataset.y) + (ev.deltaRect.top * coordinateScale);
+
+                    ({x,y} = clampPos({x,y,w:newTrueWidth,h:newTrueHeight}));
+                    Object.assign(h.dataset,{x, y, w:newTrueWidth, h:newTrueHeight});
+                    Object.assign(h.style, {
+                        left: `${x / coordinateScale}px`,
+                        top: `${y / coordinateScale}px`,
+                        width: `${newTrueWidth / coordinateScale}px`,
+                        height: `${newTrueHeight / coordinateScale}px`
+                    });
+                }
+            },
+            modifiers: [
+                interact.modifiers.aspectRatio({
+                    ratio: 'preserve',
+                    equalDelta: true,
+                }),
+            ],
+        })
+        .gesturable({
+            listeners: {
+                move (ev) {
+                    const h = ev.target;
+                    if(selectedHat !== h) return;
+                    let angle = parseFloat(h.dataset.rot) + ev.da;
+                    let scale = parseFloat(h.dataset.scale) * (1 + ev.ds);
+                    h.style.transform = `rotate(${angle}deg) scale(${scale})`;
+                    Object.assign(h.dataset, {rot: angle, scale: scale});
+                }
+            }
+        })
+        .on('tap', () => {
+          selectHat(h);
+        });
+    }
+
+    // --- distortEyes function (unchanged, but provided for completeness) ---
+    function distortEyes(detections) {
+        const ctx = layer.getContext('2d');
+        ctx.drawImage(img, 0, 0, layer.width, layer.height);
+        const originalImageData = ctx.getImageData(0, 0, layer.width, layer.height);
+        const distortedImageData = ctx.createImageData(layer.width, layer.height);
+        const origData = originalImageData.data;
+        const newData = distortedImageData.data;
+        const strength = 0.65; 
+        const effectScale = 3.0;
+        const getInterpolatedPixel = (x, y) => {
+            const x_floor = Math.floor(x), y_floor = Math.floor(y);
+            const x_frac = x - x_floor, y_frac = y - y_floor;
+            const p00_idx = (y_floor * layer.width + x_floor) * 4;
+            const p10_idx = (y_floor * layer.width + (x_floor + 1)) * 4;
+            const p01_idx = ((y_floor + 1) * layer.width + x_floor) * 4;
+            const p11_idx = ((y_floor + 1) * layer.width + (x_floor + 1)) * 4;
+            const blendedPixel = [0, 0, 0, 255];
+            for (let i = 0; i < 3; i++) {
+                const top = origData[p00_idx + i] * (1 - x_frac) + origData[p10_idx + i] * x_frac;
+                const bottom = origData[p01_idx + i] * (1 - x_frac) + origData[p11_idx + i] * x_frac;
+                blendedPixel[i] = top * (1 - y_frac) + bottom * y_frac;
+            }
+            return blendedPixel;
+        };
+        newData.set(origData);
+        detections.forEach(det => {
+            const landmarks = det.landmarks;
+            const eyeRegions = [landmarks.getLeftEye(), landmarks.getRightEye()];
+            eyeRegions.forEach(eyePoints => {
+                const xs = eyePoints.map(p => p.x), ys = eyePoints.map(p => p.y);
+                const eyeWidth = Math.max(...xs) - Math.min(...xs);
+                const cx = Math.min(...xs) + eyeWidth / 2;
+                const cy = Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) / 2;
+                const radius = (eyeWidth / 2) * effectScale;
+                if (radius === 0) return;
+                for (let y = Math.floor(cy - radius); y < Math.ceil(cy + radius); y++) {
+                    for (let x = Math.floor(cx - radius); x < Math.ceil(cx + radius); x++) {
+                        if (x < 0 || x >= layer.width || y < 0 || y >= layer.height) continue;
+                        const dx = x - cx, dy = y - cy;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        if (distance < radius) {
+                            const normalizedDist = distance / radius;
+                            const r = normalizedDist * (1.0 - strength * (1.0 - normalizedDist));
+                            const angle = Math.atan2(dy, dx);
+                            const sourceX = cx + r * radius * Math.cos(angle);
+                            const sourceY = cy + r * radius * Math.sin(angle);
+                            if (sourceX >= 0 && sourceX < layer.width - 1 && sourceY >= 0 && sourceY < layer.height - 1) {
+                                const pixel = getInterpolatedPixel(sourceX, sourceY);
+                                const destIndex = (y * layer.width + x) * 4;
+                                newData[destIndex] = pixel[0];
+                                newData[destIndex + 1] = pixel[1];
+                                newData[destIndex + 2] = pixel[2];
+                            }
                         }
                     }
                 }
-            }
+            });
         });
-    });
+        ctx.putImageData(distortedImageData, 0, 0);
+        img.hidden = true;
+        layer.hidden = false;
+    }
 
-    // Put the fully modified data back onto the canvas
-    ctx.putImageData(distortedImageData, 0, 0);
-    img.hidden = true;
-    layer.hidden = false;
-}
-
-</script>
+  </script>
 </body>
 </html>
